@@ -1,0 +1,97 @@
+.phone { position: relative; }  
+.dock-anchor { height: 12px; } 
+/* Pusatkan frame di layar desktop, lock ukuran seperti HP */
+.app-viewport {
+  min-height: 100vh;
+  background: #f3f4f6;          /* abu2 halus */
+  display: grid;
+  place-items: center;
+}
+
+.phone {
+  position: relative;
+  width: 430px;                 /* lebar HP */
+  height: 749px;                /* tinggi HP */
+  background: #fff;
+  box-shadow: 0 10px 35px rgba(0,0,0,.15);
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+/* Slot: header (absolute atas), footer (absolute bawah), konten (scroll) */
+.phone-header {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 56px;                 /* tinggi header */
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+  z-index: 20;
+}
+
+.phone-footer {
+  position: absolute;
+  inset: auto 0 0 0;
+  min-height: 64px;
+  background: #fff;
+  border-top: 1px solid #eee;
+  padding: 8px 12px;
+  z-index: 20;
+}
+
+/* area scroll di tengah, disetel terhadap header & footer */
+.phone-content {
+  position: absolute;
+  top: 56px;                    /* sama dengan header height */
+  bottom: 64px;                 /* sama dengan min-height footer */
+  left: 0;
+  right: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px;
+  background: #f8f9fb;         /* beda tipis dari bg header/footer */
+}
+
+/* untuk halaman tanpa footer, pakai kelas ini */
+.phone-content.no-footer { bottom: 0; }
+
+/* tombol kecil ala mobile */
+.btn-square-sm {
+  width: 40px; height: 40px; padding: 0;
+  display: grid; place-items: center;
+}
+
+/* Floating CTA default: mengambang */
+.floating-cta {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-52%);
+  bottom: 16px;
+  z-index: 50;
+  width: calc(413px - 24px);     /* cocok dengan lebar phone 390px */
+  max-width: 413px;
+  pointer-events: none;          /* biar tak blok scroll */
+}
+.floating-cta > * { pointer-events: auto; } /* tombol tetap bisa diklik */
+
+/* Saat sudah sampai bawah -> dock (tidak mengambang) */
+.floating-cta.docked {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 15px;
+  width: calc(413px - 24px);     /* cocok dengan lebar phone 390px */
+  max-width: 413px;
+  transform: none;
+}
+
+/* Elemen penanda "bagian paling bawah" konten */
+.dock-anchor {
+  position: relative;
+  width: 1px;
+  height: 12px;
+  margin-top: 12px;              /* beri jarak kecil dari konten terakhir */
+}
+
