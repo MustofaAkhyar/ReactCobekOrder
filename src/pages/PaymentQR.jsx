@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import QRCode from "qrcode.react";
 import PhoneShell from "../components/PhoneShell";
 import { useCart } from "../state/CartContext";
-import { getOrder, createPayment } from "../lib/api";
+import { getOrder, createPayment, payOrder, cancelOrder } from "../lib/api";
 import { updateOrderStatus } from "../utils/history";
 
 export default function PaymentQR() {
@@ -21,15 +21,15 @@ export default function PaymentQR() {
     qr: "",
   });
 
-  const [remaining, setRemaining] = useState(null); // hitung mundur detik
+  const [remaining, setRemaining] = useState(null); // detik untuk countdown
 
-  // helper: URL home berdasarkan table_number dari order
+  // home url berdasarkan meja dari order
   const homeUrl = useMemo(() => {
     const table = state.order?.table_number;
     return table ? `/?table=${table}` : "/";
   }, [state.order]);
 
-  // Ambil order + QR
+  // --- ambil order + QR ---
   useEffect(() => {
     if (!orderId) {
       nav("/", { replace: true });
@@ -39,21 +39,32 @@ export default function PaymentQR() {
     (async () => {
       try {
         const or = (await getOrder(orderId)).data;
+
+        // kalau status sudah final langsung lempar balik
+        if (["paid", "expired", "cancelled"].includes(or.status)) {
+          alert(`Order sudah ${or.status}.`);
+          nav(homeUrl, { replace: true });
+          return;
+        }
+
         let qr = or.qr_string;
         if (!qr) {
           const pay = await createPayment(or.id);
           qr = pay.data.qr_string;
         }
+
         setState({ loading: false, order: or, qr });
-        clear(); // bersihkan cart setelah order dibuat
+        clear(); // cart dikosongkan setelah order berhasil dibuat
       } catch (e) {
+        console.error(e);
         alert("Gagal memuat QR. Silakan kembali dan ulangi order.");
         nav("/", { replace: true });
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
 
-  // hitung mundur berdasarkan expires_at
+  // --- hitung mundur dari expires_at ---
   useEffect(() => {
     if (!state.order?.expires_at) return;
 
@@ -69,23 +80,35 @@ export default function PaymentQR() {
     return () => clearInterval(timer);
   }, [state.order?.expires_at]);
 
-  // polling status setiap 3 detik
+  // --- polling status setiap 3 detik ---
   useEffect(() => {
     if (!state.order) return;
+
     const t = setInterval(async () => {
-      const or = (await getOrder(orderId)).data;
-      if (or.status === "paid") {
-        updateOrderStatus(or.id, "paid");
-        clearInterval(t);
-        alert("Pembayaran berhasil!");
-        nav(homeUrl, { replace: true });
-      } else if (or.status === "expired") {
-        updateOrderStatus(or.id, "expired");
-        clearInterval(t);
-        alert("Order expired. Silakan buat order baru.");
-        nav(homeUrl, { replace: true });
+      try {
+        const or = (await getOrder(orderId)).data;
+
+        if (or.status === "paid") {
+          updateOrderStatus(or.id, "paid");
+          clearInterval(t);
+          alert("Pembayaran berhasil!");
+          nav(homeUrl, { replace: true });
+        } else if (or.status === "expired") {
+          updateOrderStatus(or.id, "expired");
+          clearInterval(t);
+          alert("Order expired. Silakan buat order baru.");
+          nav(homeUrl, { replace: true });
+        } else if (or.status === "cancelled") {
+          updateOrderStatus(or.id, "cancelled");
+          clearInterval(t);
+          alert("Order sudah dibatalkan.");
+          nav(homeUrl, { replace: true });
+        }
+      } catch (e) {
+        console.error(e);
       }
     }, 3000);
+
     return () => clearInterval(t);
   }, [state.order, orderId, homeUrl, nav]);
 
@@ -97,34 +120,9 @@ export default function PaymentQR() {
       >
         ‹
       </button>
-      <div className="fw-bold">QRIS</div>
+      <div className="fw-bold">QRIS Payment</div>
     </>
   );
-
-  const handlePayNow = async () => {
-    if (!orderId) return;
-    try {
-      const or = (await getOrder(orderId)).data;
-      if (or.status === "paid") {
-        updateOrderStatus(or.id, "paid");
-        alert("Pembayaran sudah berhasil!");
-        nav(homeUrl, { replace: true });
-      } else if (or.status === "expired") {
-        updateOrderStatus(or.id, "expired");
-        alert("Order sudah expired. Silakan buat order baru.");
-        nav(homeUrl, { replace: true });
-      } else {
-        alert("Silakan scan QR dengan aplikasi e-wallet Anda untuk membayar.");
-      }
-    } catch (e) {
-      alert("Tidak bisa mengecek status pembayaran. Coba lagi.");
-    }
-  };
-
-  const handleCancel = () => {
-    alert("Order dibatalkan. Anda akan kembali ke menu.");
-    nav(homeUrl, { replace: true });
-  };
 
   // format countdown
   const countdownText = useMemo(() => {
@@ -134,6 +132,53 @@ export default function PaymentQR() {
     const s = String(remaining % 60).padStart(2, "0");
     return `${m}:${s}`;
   }, [remaining]);
+
+  // --- PAY NOW dengan konfirmasi ---
+  const handlePayNow = async () => {
+    if (!orderId || !state.order) return;
+
+    const ok = window.confirm(
+      "Yakin ingin membayar pesanan?"
+    );
+    if (!ok) return;
+
+    try {
+      const res = await payOrder(orderId); // panggil API ubah status
+      const or = res.data;
+      updateOrderStatus(or.id, or.status);
+      alert("Pesanan berhasil dibayar.");
+      nav(homeUrl, { replace: true });
+    } catch (e) {
+      console.error(e);
+      alert("Gagal membayar pesanan. Coba lagi.");
+    }
+  };
+
+  // --- CANCEL dengan konfirmasi ---
+  const handleCancel = async () => {
+    if (!orderId || !state.order) return;
+
+    const ok = window.confirm(
+      "Yakin ingin membatalkan pesanan?"
+    );
+    if (!ok) return;
+
+    try {
+      const res = await cancelOrder(orderId); // panggil API ubah status
+      const or = res.data;
+      updateOrderStatus(or.id, or.status);
+      alert("Order telah dibatalkan.");
+      nav(homeUrl, { replace: true });
+    } catch (e) {
+      console.error(e);
+      alert(
+        "Gagal membatalkan order. Mungkin order sudah dibayar atau expired."
+      );
+    }
+  };
+
+  const disabledActions =
+    !state.order || state.order.status !== "unpaid" || remaining === 0;
 
   return (
     <PhoneShell header={header} noFooter>
@@ -160,7 +205,8 @@ export default function PaymentQR() {
             </div>
             {remaining === 0 && (
               <div className="text-danger small">
-                Waktu habis. Jika belum otomatis expired, silakan kembali dan buat order baru.
+                Waktu habis. Jika belum otomatis expired, silakan kembali dan
+                buat order baru.
               </div>
             )}
           </div>
@@ -182,12 +228,14 @@ export default function PaymentQR() {
             <button
               className="btn btn-success w-100 mb-2"
               onClick={handlePayNow}
+              disabled={disabledActions}
             >
               Pay Now
             </button>
             <button
               className="btn btn-outline-danger w-100"
               onClick={handleCancel}
+              disabled={disabledActions}
             >
               Cancel
             </button>

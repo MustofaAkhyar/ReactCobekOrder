@@ -8,3 +8,5 @@ export const fetchMenu = (id) => api.get(`/menus/${id}`);
 export const createOrder = (payload) => api.post("/orders", payload);
 export const getOrder = (id) => api.get(`/orders/${id}`);
 export const createPayment = (orderId) => api.post(`/payments/${orderId}/create`);
+export const payOrder = (id) => api.patch(`/orders/${id}/pay`);
+export const cancelOrder = (id) => api.patch(`/orders/${id}/cancel`);
